@@ -17,16 +17,20 @@ import javax.swing.SwingUtilities;
 import javax.swing.border.EtchedBorder;
 import javax.swing.border.TitledBorder;
 
+import jdk.nashorn.internal.runtime.WithObject;
+
 @SuppressWarnings("serial")
 public class Poker extends JFrame {
 	private Container pane;
 	private JPanel namePanel;
 	private JLabel totalPotLabel;
-	private JLabel[] potField;
-	private JRadioButton[] nameButton;
-	private String[] name;
-	private int[] potValue;
+	//private JLabel[] potField;
+	//private JRadioButton[] nameButton;
+	//private String[] name;
+	//private int[] potValue;
+	private Player[] allPlayer;
 	private int totalPotValue;
+	//JTextField[] nameField;
 	
 	public Poker() {
 		this.pane = this.getContentPane();
@@ -79,17 +83,13 @@ public class Poker extends JFrame {
 		
 		JPanel gamePanel = new JPanel();
 		gamePanel.setLayout(new GridLayout(0,2 ));
-		gamePanel
-		.setBorder(BorderFactory.createEmptyBorder(0,10,10,10));
-		nameButton = new JRadioButton[name.length];
-		potField = new JLabel[name.length];
-		potValue = new int[name.length];
-		for (int i = 0; i < name.length; i++) {
-			nameButton[i] = new JRadioButton(name[i]);
-			potField[i] = new JLabel("0 $");
-			potValue[i] = 0;
-			gamePanel.add(nameButton[i]);
-			gamePanel.add(potField[i]);
+		gamePanel.setBorder(BorderFactory.createEmptyBorder(0,10,10,10));
+		for (Player player : allPlayer) {
+			player.nameButton = new JRadioButton(player.name);
+			player.potField = new JLabel("0 $");
+			player.potValue = 0;
+			gamePanel.add(player.nameButton);
+			gamePanel.add(player.potField);
 		}
 		
 		JPanel controlPanel = new JPanel();
@@ -116,6 +116,60 @@ public class Poker extends JFrame {
 		pack();
 	}
 	
+	public void addWinPanel() {
+		pane.removeAll();
+		JPanel winPanel = new JPanel();
+		winPanel.setLayout(new GridLayout(0, 2));
+		winPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+		
+		int winNumber = 0;
+		for(Player player : allPlayer) {
+			if(player.win) {
+				totalPotValue -= player.potValue;
+				winNumber++;
+			}
+		}
+		
+		for(int i = 0 ; i < allPlayer.length ; i++) {
+			if(allPlayer[i].win) {
+				int winPrice = totalPotValue/winNumber;
+				for(Player losePlayer : allPlayer) {
+					if(!losePlayer.win) {
+						if(losePlayer.potValue > winPrice ) {
+							losePlayer.potValue -= winPrice;
+							losePlayer.payTo[i] = winPrice;
+							winPrice = 0;
+						}
+						else {
+							winPrice -= losePlayer.potValue;
+							losePlayer.payTo[i] = losePlayer.potValue;
+							losePlayer.potValue = 0;
+						}
+					}
+				}
+			}
+		}
+		
+		for(Player player : allPlayer) {
+			if(!player.win) {
+				winPanel.add(new JLabel(player.name + " pay to"));
+				winPanel.add(new JLabel(""));
+				
+				for (int i = 0; i < player.payTo.length; i++) {
+					if(player.payTo[i] != 0) {
+						winPanel.add(new JLabel(allPlayer[i].name));
+						winPanel.add(new JLabel(player.payTo[i] + " $"));
+					}
+				}
+				winPanel.add(new JLabel(""));
+				winPanel.add(new JLabel(""));
+			}
+		}
+		pane.add(winPanel, BorderLayout.NORTH);
+		pack();
+		
+	}
+	
 	public void addPlayerSlot(int n) {
 		if(namePanel != null) {
 			pane.remove(namePanel);
@@ -125,12 +179,17 @@ public class Poker extends JFrame {
 		namePanel = new JPanel();
 		namePanel.setLayout(new GridLayout(0, 2));
 		namePanel.setBorder(BorderFactory.createEmptyBorder(0,10,10,10));
-		
 		namePanel.add(new JLabel("Player name :"));
 		namePanel.add(new JLabel(""));
+		
+		allPlayer = new Player[n];
+		
 		JTextField[] nameField = new JTextField[n];
-		name = new String[n];
+		//nameField = new JTextField[n];
+		//name = new String[n];
 		for(int i=0; i<n ;i++) {
+			allPlayer[i] = new Player();
+			allPlayer[i].payTo = new int[n];
 			nameField[i] = new JTextField();
 			namePanel.add(new JLabel("Player #"+(i+1)));
 			namePanel.add(nameField[i]);
@@ -141,7 +200,7 @@ public class Poker extends JFrame {
 					try {
 						int index = Integer.parseInt(e.getActionCommand());
 						JTextField temp = (JTextField)e.getSource();
-						name[index] = temp.getText();
+						allPlayer[index].name = temp.getText();
 					} catch (Exception e2) {
 						System.out.println("Error: adding player name.");
 					}
@@ -153,8 +212,8 @@ public class Poker extends JFrame {
 		newGameButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				for (int i = 0; i < nameField.length; i++) {
-					name[i] = nameField[i].getText();
+				for (int i = 0; i < allPlayer.length; i++) {
+					allPlayer[i].name = nameField[i].getText();
 				}
 				addGamePanel();
 			}
@@ -182,6 +241,24 @@ public class Poker extends JFrame {
 		});
 	}
 	
+	class Player {
+		
+		String name;
+		int potValue;
+		int[] payTo;
+		boolean win;
+		JLabel potField;
+		JRadioButton nameButton;
+		
+		public Player(String name) {
+			this.name = name;
+		}
+		
+		public Player() {
+			
+		}
+	}
+	
 	class controlButtonListener implements ActionListener {
 		JTextField raiseField;
 		public controlButtonListener(JTextField raiseField) {
@@ -194,13 +271,13 @@ public class Poker extends JFrame {
 				try {
 					int raise = Integer.parseInt(raiseField.getText());
 					int count = 0;
-					for (int i = 0; i < nameButton.length; i++) {
-						if(nameButton[i].isSelected()) {
-							potValue[i] += raise;
-							potField[i].setText(potValue[i] + " $");
+					for (Player player : allPlayer) {
+						if(player.nameButton.isSelected()) {
+							player.potValue += raise;
+							player.potField.setText(player.potValue + " $");
 							count++;
 						}
-						nameButton[i].setSelected(false);
+						player.nameButton.setSelected(false);
 					}
 					totalPotValue += raise*count;
 					totalPotLabel.setText(totalPotValue + " $");
@@ -209,7 +286,12 @@ public class Poker extends JFrame {
 				}
 			}
 			else if(action.equals("win")) {
-				
+				for (Player player : allPlayer) {
+					if(player.nameButton.isSelected()) {
+						player.win = true;
+					}
+				}
+				addWinPanel();
 			}
 		}
 		
